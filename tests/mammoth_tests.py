@@ -199,13 +199,6 @@ def underline_is_ignored_by_defualt():
 
 
 @istest
-def underline_can_be_configured_with_convert_underline_option():
-    with open(test_path("underline.docx"), "rb") as fileobj:
-        result = mammoth.convert_to_html(fileobj=fileobj, convert_underline=mammoth.underline.element("em"))
-        assert_equal('<p><strong>The </strong><strong><em>Sunset</em></strong><strong> Tree</strong></p>', result.value)
-
-
-@istest
 def underline_can_be_configured_with_style_mapping():
     with open(test_path("underline.docx"), "rb") as fileobj:
         result = mammoth.convert_to_html(fileobj=fileobj, style_map="u => em")
