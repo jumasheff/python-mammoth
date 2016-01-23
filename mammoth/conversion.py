@@ -197,7 +197,7 @@ class _DocumentConverter(documents.ElementVisitor):
             "href": "#" + self._note_html_id(note_reference),
             "id": self._note_ref_html_id(note_reference),
         })
-        self._note_references.append(note_reference);
+        self._note_references.append(note_reference)
         note_number = len(self._note_references)
         self._html_generator.text("[{0}]".format(note_number))
         self._html_generator.end()
