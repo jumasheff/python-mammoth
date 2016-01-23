@@ -192,13 +192,13 @@ class _DocumentConverter(documents.ElementVisitor):
         self._html_generator.self_closing("br")
     
     def visit_note_reference(self, note_reference):
-        self._html_generator.start("sup")
         self._html_generator.start("a", {
             "href": "#" + self._note_html_id(note_reference),
             "id": self._note_ref_html_id(note_reference),
         })
         self._note_references.append(note_reference)
         note_number = len(self._note_references)
+        self._html_generator.start("sup")
         self._html_generator.text("[{0}]".format(note_number))
         self._html_generator.end()
         self._html_generator.end()
