@@ -6,8 +6,7 @@ import io
 
 from nose.tools import istest, assert_equal
 
-import mammoth
-from mammoth import documents, style_reader, results
+from mammoth import documents, style_reader, results, html
 from mammoth.conversion import convert_document_element_to_html
 from mammoth.docx.xmlparser import parse_xml
 
@@ -148,7 +147,7 @@ def bulleted_styles_dont_match_plain_paragraph():
     
 
 @istest
-def bold_runs_are_wrapped_in_strong_tags():
+def bold_runs_are_wrapped_in_strong_tags_by_default():
     result = convert_document_element_to_html(
         documents.run(children=[documents.text("Hello")], is_bold=True),
     )
@@ -156,11 +155,29 @@ def bold_runs_are_wrapped_in_strong_tags():
     
 
 @istest
-def italic_runs_are_wrapped_in_emphasis_tags():
+def bold_runs_can_be_configured_with_style_mapping():
+    result = convert_document_element_to_html(
+        documents.run(children=[documents.text("Hello")], is_bold=True),
+        style_map=[_style_mapping("b => em")]
+    )
+    assert_equal("<em>Hello</em>", result.value)
+    
+
+@istest
+def italic_runs_are_wrapped_in_emphasis_tags_by_default():
     result = convert_document_element_to_html(
         documents.run(children=[documents.text("Hello")], is_italic=True),
     )
     assert_equal("<em>Hello</em>", result.value)
+    
+
+@istest
+def italic_runs_can_be_configured_with_style_mapping():
+    result = convert_document_element_to_html(
+        documents.run(children=[documents.text("Hello")], is_italic=True),
+        style_map=[_style_mapping("i => strong")]
+    )
+    assert_equal("<strong>Hello</strong>", result.value)
     
 
 @istest
@@ -169,15 +186,6 @@ def underline_runs_are_ignored_by_default():
         documents.run(children=[documents.text("Hello")], is_underline=True),
     )
     assert_equal("Hello", result.value)
-    
-
-@istest
-def underline_runs_can_be_wrapped_in_tags_using_convert_underline_argument():
-    result = convert_document_element_to_html(
-        documents.run(children=[documents.text("Hello")], is_underline=True),
-        convert_underline=mammoth.underline.element("u")
-    )
-    assert_equal("<u>Hello</u>", result.value)
     
 
 @istest
@@ -266,7 +274,7 @@ def docx_hyperlink_with_href_is_converted_to_anchor_tag():
 def docx_hyperlink_with_internal_anchor_reference_is_converted_to_anchor_tag():
     result = convert_document_element_to_html(
         documents.hyperlink(anchor="start", children=[documents.Text("Hello")]),
-        id_prefix="doc-42",
+        id_prefix="doc-42-",
     )
     assert_equal('<a href="#doc-42-start">Hello</a>', result.value)
 
@@ -275,7 +283,7 @@ def docx_hyperlink_with_internal_anchor_reference_is_converted_to_anchor_tag():
 def bookmarks_are_converted_to_anchors_with_ids():
     result = convert_document_element_to_html(
         documents.bookmark(name="start"),
-        id_prefix="doc-42",
+        id_prefix="doc-42-",
     )
     assert_equal('<a id="doc-42-start"></a>', result.value)
 
@@ -324,6 +332,37 @@ def empty_cells_are_preserved_in_table():
 
 
 @istest
+def table_cells_are_written_with_colspan_if_not_equal_to_one():
+    table = documents.table([
+        documents.table_row([
+            documents.table_cell([_paragraph_with_text("Top left")], colspan=2),
+            documents.table_cell([_paragraph_with_text("Top right")]),
+        ]),
+    ])
+    result = convert_document_element_to_html(table)
+    expected_html = (
+        "<table>" +
+        "<tr><td colspan=\"2\"><p>Top left</p></td><td><p>Top right</p></td></tr>" +
+        "</table>")
+    assert_equal(expected_html, result.value)
+
+
+@istest
+def table_cells_are_written_with_rowspan_if_not_equal_to_one():
+    table = documents.table([
+        documents.table_row([
+            documents.table_cell([], rowspan=2),
+        ]),
+    ])
+    result = convert_document_element_to_html(table)
+    expected_html = (
+        "<table>" +
+        "<tr><td rowspan=\"2\"></td></tr>" +
+        "</table>")
+    assert_equal(expected_html, result.value)
+
+
+@istest
 def line_break_is_converted_to_br():
     line_break = documents.line_break()
     result = convert_document_element_to_html(line_break)
@@ -347,9 +386,9 @@ def images_have_alt_tags_if_available():
 
 @istest
 def can_define_custom_conversion_for_images():
-    def convert_image(image, html_generator):
+    def convert_image(image):
         with image.open() as image_file:
-            html_generator.self_closing("img", {"alt": image_file.read().decode("ascii")})
+            return [html.self_closing_element("img", {"alt": image_file.read().decode("ascii")})]
         
     image = documents.image(alt_text=None, content_type="image/png", open=lambda: io.BytesIO(b"abc"))
     result = convert_document_element_to_html(image, convert_image=convert_image)
@@ -361,7 +400,7 @@ def footnote_reference_is_converted_to_superscript_intra_page_link():
     footnote_reference = documents.note_reference("footnote", "4")
     result = convert_document_element_to_html(
         footnote_reference,
-        id_prefix="doc-42"
+        id_prefix="doc-42-"
     )
     assert_equal('<sup><a href="#doc-42-footnote-4" id="doc-42-footnote-ref-4">[1]</a></sup>', result.value)
 
@@ -380,7 +419,7 @@ def footnotes_are_included_after_the_main_body():
     )
     result = convert_document_element_to_html(
         document,
-        id_prefix="doc-42"
+        id_prefix="doc-42-"
     )
     expected_html = ('<p>Knock knock<sup><a href="#doc-42-footnote-4" id="doc-42-footnote-ref-4">[1]</a></sup></p>' +
                 '<ol><li id="doc-42-footnote-4"><p>Who\'s there? <a href="#doc-42-footnote-ref-4">↑</a></p></li></ol>')

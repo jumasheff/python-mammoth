@@ -1,3 +1,42 @@
+# 1.0.3
+
+* Add support for table cells spanning multiple rows.
+
+# 1.0.2
+
+* Add support for table cells spanning multiple columns.
+
+# 1.0.1
+
+* Improve script installation on Windows by using entry_points instead of
+  scripts in setup.py.
+
+# 1.0.0
+
+* Remove deprecated convert_underline argument.
+
+* Officially support ID prefixes.
+
+* Generated IDs no longer insert a hyphen after the ID prefix.
+
+* The default ID prefix is now the empty string rather than a random number
+  followed by a hyphen.
+
+* Rename mammoth.images.inline to mammoth.images.img_element to better reflect
+  its behaviour.
+
+# 0.3.31
+
+* Improve collapsing of similar non-fresh HTML elements.
+
+# 0.3.30
+
+* Allow bold and italic style mappings to be configured.
+
+# 0.3.29
+
+* Handle references to missing styles when reading documents.
+
 # 0.3.28
 
 * Improve support for lists made in LibreOffice. Specifically, this changes the

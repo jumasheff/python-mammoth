@@ -2,7 +2,7 @@
 
 import os
 import sys
-from distutils.core import setup
+from setuptools import setup
 
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
@@ -18,18 +18,22 @@ if sys.version_info[:2] <= (2, 6):
 
 setup(
     name='mammoth',
-    version='0.3.28',
+    version='1.0.3',
     description='Convert Word documents from docx to simple and clean HTML and Markdown',
     long_description=read("README.md"),
     author='Michael Williamson',
     author_email='mike@zwobble.org',
     url='http://github.com/mwilliamson/python-mammoth',
-    packages=['mammoth', 'mammoth.docx', 'mammoth.style_reader', 'mammoth.writers'],
-    scripts=["scripts/mammoth"],
+    packages=['mammoth', 'mammoth.docx', 'mammoth.html', 'mammoth.style_reader', 'mammoth.writers'],
+    entry_points={
+        "console_scripts": [
+            "mammoth=mammoth.cli:main"
+        ]
+    },
     keywords="docx word office clean html markdown md",
     install_requires=_install_requires,
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Programming Language :: Python',

@@ -48,7 +48,8 @@ class TableRow(HasChildren):
 
 @cobble.data
 class TableCell(HasChildren):
-    pass
+    colspan = cobble.field()
+    rowspan = cobble.field()
 
 @cobble.data
 class LineBreak(Element):
@@ -111,7 +112,14 @@ bookmark = Bookmark
 
 table = Table
 table_row = TableRow
-table_cell = TableCell
+def table_cell(children, colspan=None, rowspan=None):
+    if colspan is None:
+        colspan = 1
+    if rowspan is None:
+        rowspan = 1
+    return TableCell(children=children, colspan=colspan, rowspan=rowspan)
+
+
 line_break = LineBreak
 
 def numbering_level(level_index, is_ordered):

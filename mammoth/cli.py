@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import argparse
 import contextlib
 import sys
@@ -7,7 +5,7 @@ import os
 import shutil
 
 import mammoth
-from mammoth import writers
+from . import writers
 
 
 def main():
@@ -24,7 +22,7 @@ def main():
             convert_image = None
             output_path = args.output
         else:
-            convert_image = mammoth.images.inline(ImageWriter(args.output_dir))
+            convert_image = mammoth.images.img_element(ImageWriter(args.output_dir))
             output_filename = "{0}.html".format(os.path.basename(args.path).rpartition(".")[0])
             output_path = os.path.join(args.output_dir, output_filename)
         
@@ -114,3 +112,4 @@ def _parse_args():
 
 if __name__ == "__main__":
     main()
+

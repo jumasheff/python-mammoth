@@ -42,6 +42,19 @@ The following features are currently supported:
 ## Installation
 
     pip install mammoth
+
+## Other supported platforms
+
+* [JavaScript](https://github.com/mwilliamson/mammoth.js), both the browser and node.js.
+  Available [on npm](https://www.npmjs.com/package/mammoth).
+
+* [WordPress](https://wordpress.org/plugins/mammoth-docx-converter/).
+
+* [Java/JVM](https://github.com/mwilliamson/java-mammoth).
+  Available [on Maven Central](http://search.maven.org/#search|ga|1|g%3A%22org.zwobble.mammoth%22%20AND%20a%3A%22mammoth%22).
+
+* [.NET](https://github.com/mwilliamson/dotnet-mammoth).
+  Available [on NuGet](https://www.nuget.org/packages/Mammoth/).
     
 ## Usage
 
@@ -53,6 +66,10 @@ For instance:
     mammoth document.docx output.html
 
 If no output file is specified, output is written to stdout instead.
+
+The output is an HTML fragment, rather than a full HTML document, encoded with UTF-8.
+Since the encoding is not explicitly set in the fragment,
+opening the output file in a web browser may cause Unicode characters to be rendered incorrectly if the browser doesn't default to UTF-8.
 
 #### Images
 
@@ -164,7 +181,33 @@ def convert_image(image):
         "src": "data:{0};base64,{1}".format(image.content_type, encoded_src)
     }
 
-mammoth.convert_to_html(docx_file, convert_image=mammoth.images.inline(convert_image))
+mammoth.convert_to_html(docx_file, convert_image=mammoth.images.img_element(convert_image))
+```
+
+#### Bold
+
+By default, bold text is wrapped in `<strong>` tags.
+This behaviour can be changed by adding a style mapping for `b`.
+For instance, to wrap bold text in `<em>` tags:
+
+```python
+style_map = "b => em"
+
+with open("document.docx", "rb") as docx_file:
+    result = mammoth.convert_to_html(docx_file, style_map=style_map)
+```
+
+#### Italic
+
+By default, italic text is wrapped in `<em>` tags.
+This behaviour can be changed by adding a style mapping for `i`.
+For instance, to wrap italic text in `<strong>` tags:
+
+```python
+style_map = "i => strong"
+
+with open("document.docx", "rb") as docx_file:
+    result = mammoth.convert_to_html(docx_file, style_map=style_map)
 ```
 
 #### Underline
@@ -183,14 +226,7 @@ with open("document.docx", "rb") as docx_file:
     result = mammoth.convert_to_html(docx_file, style_map=style_map)
 ```
 
-The `convert_underline` argument is deprecated, and will be removed in Mammoth 1.0.
-The following behaves as the example above:
-
-```python
-mammoth.convert_to_html(docx_file, convert_underline=mammoth.underline.element("em"))
-```
-
-### Strikethrough
+#### Strikethrough
 
 By default, strikethrough text is wrapped in `<s>` tags.
 This behaviour can be changed by adding a style mapping for `strike`.
@@ -222,11 +258,13 @@ Converts the source document to HTML.
 * `convert_image`: by default, images are converted to `<img>` elements with the source included inline in the `src` attribute.
   Set this argument to an [image converter](#image-converters) to override the default behaviour.
   
-* `convert_underline`: deprecated in favour of using style mappings to describe how to convert underlined text.
-  Set this argument to [`mammoth.underline.element(name)`](#underline) to override the default behaviour.
-  
 * `ignore_empty_paragraphs`: by default, empty paragraphs are ignored.
   Set this option to `False` to preserve empty paragraphs in the output.
+
+* `id_prefix`:
+  a string to prepend to any generated IDs,
+  such as those used by bookmarks, footnotes and endnotes.
+  Defaults to an empty string.
 
 * Returns a result with the following properties:
 
@@ -278,8 +316,8 @@ Each message has the following properties:
 
 #### Image converters
 
-An inline image converter can be created by calling `mammoth.images.inline(func)`.
-This creates an inline `<img>` element for each image in the original docx.
+An image converter can be created by calling `mammoth.images.img_element(func)`.
+This creates an `<img>` element for each image in the original docx.
 `func` should be a function that has one argument `image`.
 This argument is the image element being converted,
 and has the following properties:
@@ -288,8 +326,10 @@ and has the following properties:
   
 * `content_type`: the content type of the image, such as `image/png`.
 
-`func` should return a `dict` with a `src` item,
-which will be used as the `src` attribute on the `<img>` element.
+`func` should return a `dict` of attributes for the `<img>` element.
+At a minimum, this should include the `src` attribute.
+If any alt text is found for the image,
+this will be automatically added to the element's attributes.
 
 For instance, the following replicates the default image conversion:
 
@@ -302,7 +342,7 @@ def convert_image(image):
         "src": "data:{0};base64,{1}".format(image.content_type, encoded_src)
     }
 
-mammoth.images.inline(convert_image)
+mammoth.images.img_element(convert_image)
 ```
 
 ## Writing style maps
@@ -380,6 +420,28 @@ For instance, to match a paragraph with the style ID `Heading1`:
 ```
 p.Heading1
 ```
+
+#### Bold
+
+Match explicitly bold text:
+
+```
+b
+```
+
+Note that this matches text that has had bold explicitly applied to it.
+It will not match any text that is bold because of its paragraph or run style.
+
+#### Italic
+
+Match explicitly italic text:
+
+```
+i
+```
+
+Note that this matches text that has had italic explicitly applied to it.
+It will not match any text that is italic because of its paragraph or run style.
 
 #### Underline
 

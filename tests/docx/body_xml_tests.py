@@ -40,7 +40,7 @@ class ReadXmlElementTests(object):
         assert_equal(None, _read_and_get_document_xml_element(element).style_id)
         
     @istest
-    def paragraph_has_style_id_read_from_paragraph_properties_if_present(self):
+    def paragraph_has_style_id_and_name_read_from_paragraph_properties_if_present(self):
         style_xml = xml_element("w:pStyle", {"w:val": "Heading1"})
         properties_xml = xml_element("w:pPr", {}, [style_xml])
         paragraph_xml = xml_element("w:p", {}, [properties_xml])
@@ -49,17 +49,21 @@ class ReadXmlElementTests(object):
         
         paragraph = _read_and_get_document_xml_element(paragraph_xml, styles=styles)
         assert_equal("Heading1", paragraph.style_id)
+        assert_equal("Heading 1", paragraph.style_name)
         
     @istest
-    def paragraph_has_style_name_read_from_paragraph_properties_and_styles(self):
+    def warning_is_emitted_when_paragraph_style_cannot_be_found(self):
         style_xml = xml_element("w:pStyle", {"w:val": "Heading1"})
         properties_xml = xml_element("w:pPr", {}, [style_xml])
         paragraph_xml = xml_element("w:p", {}, [properties_xml])
         
-        styles = Styles({"Heading1": Style(style_id="Heading1", name="Heading 1")}, {})
+        styles = Styles({}, {})
         
-        paragraph = _read_and_get_document_xml_element(paragraph_xml, styles=styles)
-        assert_equal("Heading 1", paragraph.style_name)
+        result = _read_document_xml_element(paragraph_xml, styles=styles)
+        paragraph = result.value
+        assert_equal("Heading1", paragraph.style_id)
+        assert_equal(None, paragraph.style_name)
+        assert_equal([results.warning("Paragraph style with ID Heading1 was referenced but not defined in the document")], result.messages)
         
     @istest
     def paragraph_has_no_numbering_if_it_has_no_numbering_properties(self):
@@ -112,22 +116,29 @@ class ReadXmlElementTests(object):
         assert_equal(None, _read_and_get_document_xml_element(element).style_id)
         
     @istest
-    def run_has_style_id_read_from_run_properties_if_present(self):
+    def run_has_style_id_and_name_read_from_run_properties_if_present(self):
         style_xml = xml_element("w:rStyle", {"w:val": "Heading1Char"})
         
         styles = Styles({}, {"Heading1Char": Style(style_id="Heading1Char", name="Heading 1 Char")})
         
         run = self._read_run_with_properties([style_xml], styles=styles)
         assert_equal("Heading1Char", run.style_id)
+        assert_equal("Heading 1 Char", run.style_name)
         
     @istest
-    def run_has_style_name_read_from_run_properties_and_styles(self):
+    def warning_is_emitted_when_run_style_cannot_be_found(self):
         style_xml = xml_element("w:rStyle", {"w:val": "Heading1Char"})
+        properties_xml = xml_element("w:rPr", {}, [style_xml])
+        run_xml = xml_element("w:r", {}, [properties_xml])
         
-        styles = Styles({}, {"Heading1Char": Style(style_id="Heading1Char", name="Heading 1 Char")})
+        styles = Styles({}, {})
         
-        run = self._read_run_with_properties([style_xml], styles=styles)
-        assert_equal("Heading 1 Char", run.style_name)
+        result = _read_document_xml_element(run_xml, styles=styles)
+        run = result.value
+        assert_equal("Heading1Char", run.style_id)
+        assert_equal(None, run.style_name)
+        assert_equal([results.warning("Run style with ID Heading1Char was referenced but not defined in the document")], result.messages)
+        
         
     @istest
     def run_is_not_bold_if_bold_element_is_not_present(self):
@@ -210,6 +221,111 @@ class ReadXmlElementTests(object):
             ])
         ])
         assert_equal(expected_result, table)
+    
+    
+    @istest
+    def gridspan_is_read_as_colspan_for_table_cell(self):
+        element = xml_element("w:tbl", {}, [
+            xml_element("w:tr", {}, [
+                xml_element("w:tc", {}, [
+                    xml_element("w:tcPr", {}, [
+                        xml_element("w:gridSpan", {"w:val": "2"})
+                    ]),
+                    xml_element("w:p", {}, [])
+                ]),
+            ]),
+        ])
+        table = _read_and_get_document_xml_element(element)
+        expected_result = documents.table([
+            documents.table_row([
+                documents.table_cell([
+                    documents.paragraph([])
+                ], colspan=2)
+            ])
+        ])
+        assert_equal(expected_result, table)
+
+
+    @istest
+    def vmerge_is_read_as_rowspan_for_table_cell(self):
+        element = xml_element("w:tbl", {}, [
+            w_tr(w_tc()),
+            w_tr(w_tc(properties=[w_vmerge("restart")])),
+            w_tr(w_tc(properties=[w_vmerge("continue")])),
+            w_tr(w_tc(properties=[w_vmerge("continue")])),
+            w_tr(w_tc())
+        ])
+        result = _read_and_get_document_xml_element(element)
+        expected_result = documents.table([
+            documents.table_row([documents.table_cell([])]),
+            documents.table_row([documents.table_cell([], rowspan=3)]),
+            documents.table_row([]),
+            documents.table_row([]),
+            documents.table_row([documents.table_cell([])]),
+        ])
+        assert_equal(expected_result, result)
+
+
+    @istest
+    def vmerge_without_val_is_treated_as_continue(self):
+        element = xml_element("w:tbl", {}, [
+            w_tr(w_tc(properties=[w_vmerge("restart")])),
+            w_tr(w_tc(properties=[w_vmerge(None)])),
+        ])
+        result = _read_and_get_document_xml_element(element)
+        expected_result = documents.table([
+            documents.table_row([documents.table_cell([], rowspan=2)]),
+            documents.table_row([]),
+        ])
+        assert_equal(expected_result, result)
+
+
+    @istest
+    def vmerge_accounts_for_cells_spanning_columns(self):
+        element = xml_element("w:tbl", {}, [
+            w_tr(w_tc(), w_tc(), w_tc(properties=[w_vmerge("restart")])),
+            w_tr(w_tc(properties=[w_gridspan("2")]), w_tc(properties=[w_vmerge("continue")])),
+            w_tr(w_tc(), w_tc(), w_tc(properties=[w_vmerge("continue")])),
+            w_tr(w_tc(), w_tc(), w_tc()),
+        ])
+        result = _read_and_get_document_xml_element(element)
+        expected_result = documents.table([
+            documents.table_row([documents.table_cell([]), documents.table_cell([]), documents.table_cell([], rowspan=3)]),
+            documents.table_row([documents.table_cell([], colspan=2)]),
+            documents.table_row([documents.table_cell([]), documents.table_cell([])]),
+            documents.table_row([documents.table_cell([]), documents.table_cell([]), documents.table_cell([])]),
+        ])
+        assert_equal(expected_result, result)
+
+
+    @istest
+    def no_vertical_cell_merging_if_merged_cells_do_not_line_up(self):
+        element = xml_element("w:tbl", {}, [
+            w_tr(w_tc(properties=[w_gridspan("2")]), w_tc(properties=[w_vmerge("restart")])),
+            w_tr(w_tc(), w_tc(properties=[w_vmerge("continue")])),
+        ])
+        result = _read_and_get_document_xml_element(element)
+        expected_result = documents.table([
+            documents.table_row([documents.table_cell([], colspan=2), documents.table_cell([])]),
+            documents.table_row([documents.table_cell([]), documents.table_cell([])]),
+        ])
+        assert_equal(expected_result, result)
+
+
+    @istest
+    def warning_if_non_row_in_table(self):
+        element = xml_element("w:tbl", {}, [xml_element("w:p")])
+        result = _read_document_xml_element(element)
+        expected_warning = results.warning("unexpected non-row element in table, cell merging may be incorrect")
+        assert_equal([expected_warning], result.messages)
+
+
+    @istest
+    def warning_if_non_cell_in_table_row(self):
+        element = xml_element("w:tbl", {}, [w_tr(xml_element("w:p"))])
+        result = _read_document_xml_element(element)
+        expected_warning = results.warning("unexpected non-cell element in table row, cell merging may be incorrect")
+        assert_equal([expected_warning], result.messages)
 
 
     @istest
@@ -262,7 +378,7 @@ class ReadXmlElementTests(object):
         run_element = xml_element("w:r")
         element = xml_element("w:hyperlink", {}, [run_element])
         assert_equal(
-            [documents.run([])],
+            documents.run([]),
             _read_and_get_document_xml_element(element)
         )
         
@@ -296,8 +412,8 @@ class ReadXmlElementTests(object):
         
         
     @istest
-    @funk.with_context
-    def can_read_imagedata_elements_with_rid_attribute(self, context):
+    @funk.with_mocks
+    def can_read_imagedata_elements_with_rid_attribute(self, mocks):
         imagedata_element = xml_element("v:imagedata", {"r:id": "rId5", "o:title": "It's a hat"})
         
         image_bytes = b"Not an image at all!"
@@ -306,10 +422,10 @@ class ReadXmlElementTests(object):
             "rId5": Relationship(target="media/hat.png")
         })
         
-        docx_file = context.mock()
+        docx_file = mocks.mock()
         funk.allows(docx_file).open("word/media/hat.png").returns(io.BytesIO(image_bytes))
         
-        content_types = context.mock()
+        content_types = mocks.mock()
         funk.allows(content_types).find_content_type("word/media/hat.png").returns("image/png")
         
         image = _read_and_get_document_xml_element(
@@ -326,8 +442,8 @@ class ReadXmlElementTests(object):
         
         
     @istest
-    @funk.with_context
-    def can_read_inline_pictures(self, context):
+    @funk.with_mocks
+    def can_read_inline_pictures(self, mocks):
         drawing_element = _create_inline_image(
             blip=_embedded_blip("rId5"),
             description="It's a hat",
@@ -339,10 +455,10 @@ class ReadXmlElementTests(object):
             "rId5": Relationship(target="media/hat.png")
         })
         
-        docx_file = context.mock()
+        docx_file = mocks.mock()
         funk.allows(docx_file).open("word/media/hat.png").returns(io.BytesIO(image_bytes))
         
-        content_types = context.mock()
+        content_types = mocks.mock()
         funk.allows(content_types).find_content_type("word/media/hat.png").returns("image/png")
         
         image = _read_and_get_document_xml_element(
@@ -350,7 +466,7 @@ class ReadXmlElementTests(object):
             content_types=content_types,
             relationships=relationships,
             docx_file=docx_file,
-        )[0]
+        )
         assert_equal(documents.Image, type(image))
         assert_equal("It's a hat", image.alt_text)
         assert_equal("image/png", image.content_type)
@@ -358,8 +474,8 @@ class ReadXmlElementTests(object):
             assert_equal(image_bytes, image_file.read())
         
     @istest
-    @funk.with_context
-    def can_read_anchored_pictures(self, context):
+    @funk.with_mocks
+    def can_read_anchored_pictures(self, mocks):
         drawing_element = _create_anchored_image(
             blip=_embedded_blip("rId5"),
             description="It's a hat",
@@ -371,10 +487,10 @@ class ReadXmlElementTests(object):
             "rId5": Relationship(target="media/hat.png")
         })
         
-        docx_file = context.mock()
+        docx_file = mocks.mock()
         funk.allows(docx_file).open("word/media/hat.png").returns(io.BytesIO(image_bytes))
         
-        content_types = context.mock()
+        content_types = mocks.mock()
         funk.allows(content_types).find_content_type("word/media/hat.png").returns("image/png")
         
         image = _read_and_get_document_xml_element(
@@ -382,7 +498,7 @@ class ReadXmlElementTests(object):
             content_types=content_types,
             relationships=relationships,
             docx_file=docx_file,
-        )[0]
+        )
         assert_equal(documents.Image, type(image))
         assert_equal("It's a hat", image.alt_text)
         assert_equal("image/png", image.content_type)
@@ -391,8 +507,8 @@ class ReadXmlElementTests(object):
         
         
     @istest
-    @funk.with_context
-    def warning_if_unsupported_image_type(self, context):
+    @funk.with_mocks
+    def warning_if_unsupported_image_type(self, mocks):
         drawing_element = _create_inline_image(
             blip=_embedded_blip("rId5"),
             description="It's a hat",
@@ -404,10 +520,10 @@ class ReadXmlElementTests(object):
             "rId5": Relationship(target="media/hat.emf")
         })
         
-        docx_file = context.mock()
+        docx_file = mocks.mock()
         funk.allows(docx_file).open("word/media/hat.emf").returns(io.BytesIO(image_bytes))
         
-        content_types = context.mock()
+        content_types = mocks.mock()
         funk.allows(content_types).find_content_type("word/media/hat.emf").returns("image/x-emf")
         
         result = _read_document_xml_element(
@@ -416,14 +532,14 @@ class ReadXmlElementTests(object):
             relationships=relationships,
             docx_file=docx_file,
         )
-        assert_equal("image/x-emf", result.value[0].content_type)
+        assert_equal("image/x-emf", result.value.content_type)
         expected_warning = results.warning("Image of type image/x-emf is unlikely to display in web browsers")
         assert_equal([expected_warning], result.messages)
         
         
     @istest
-    @funk.with_context
-    def can_read_linked_pictures(self, context):
+    @funk.with_mocks
+    def can_read_linked_pictures(self, mocks):
         drawing_element = _create_inline_image(
             blip=_linked_blip("rId5"),
             description="It's a hat",
@@ -435,11 +551,11 @@ class ReadXmlElementTests(object):
             "rId5": Relationship(target="file:///media/hat.png")
         })
         
-        files = context.mock()
+        files = mocks.mock()
         funk.allows(files).verify("file:///media/hat.png")
         funk.allows(files).open("file:///media/hat.png").returns(io.BytesIO(image_bytes))
         
-        content_types = context.mock()
+        content_types = mocks.mock()
         funk.allows(content_types).find_content_type("file:///media/hat.png").returns("image/png")
         
         image = _read_and_get_document_xml_element(
@@ -447,7 +563,7 @@ class ReadXmlElementTests(object):
             content_types=content_types,
             relationships=relationships,
             files=files,
-        )[0]
+        )
         assert_equal(documents.Image, type(image))
         assert_equal("It's a hat", image.alt_text)
         assert_equal("image/png", image.content_type)
@@ -501,7 +617,7 @@ class ReadXmlElementTests(object):
         paragraph = xml_element("w:p", {}, [
             xml_element("w:r", {}, [text_box])
         ])
-        result = _read_and_get_document_xml_element(paragraph)
+        result = _read_and_get_document_xml_elements(paragraph)
         assert_equal(result[1].style_id, "textbox-content")
     
     @istest
@@ -515,7 +631,7 @@ class ReadXmlElementTests(object):
             ])
         ])
         result = _read_and_get_document_xml_element(element)
-        assert_equal("second", result[0].style_id)
+        assert_equal("second", result.style_id)
     
     @istest
     def text_nodes_are_ignored_when_reading_children(self):
@@ -525,22 +641,52 @@ class ReadXmlElementTests(object):
             _read_and_get_document_xml_element(element)
         )
 
-
 def _read_and_get_document_xml_element(*args, **kwargs):
+    return _read_and_get_document_xml(
+        lambda reader, element: reader.read(element),
+        *args,
+        **kwargs)
+
+
+def _read_and_get_document_xml_elements(*args, **kwargs):
+    return _read_and_get_document_xml(
+        lambda reader, element: reader.read_all([element]),
+        *args,
+        **kwargs)
+
+
+def _read_and_get_document_xml(func, *args, **kwargs):
     styles = kwargs.pop("styles", FakeStyles())
-    result = _read_document_xml_element(*args, styles=styles, **kwargs)
+    result = _read_document_xml(func, *args, styles=styles, **kwargs)
     assert_equal([], result.messages)
     return result.value
 
 
-def _read_document_xml_element(element, *args, **kwargs):
+def _read_document_xml_element(*args, **kwargs):
+    return _read_document_xml(
+        lambda reader, element: reader.read(element),
+        *args,
+        **kwargs)
+
+
+def _read_document_xml_elements(*args, **kwargs):
+    return _read_document_xml(
+        lambda reader, element: reader.read_all([element]),
+        *args,
+        **kwargs)
+
+
+def _read_document_xml(func, element, *args, **kwargs):
     reader = body_xml.reader(*args, **kwargs)
-    return reader.read(element)
+    return func(reader, element)
 
 
 class FakeStyles(object):
     def find_paragraph_style_by_id(self, style_id):
         return Style(style_id, style_id)
+    
+    def find_character_style_by_id(self, style_id):
+        return None
 
 def _document_element_with_text(text):
     return xml_element("w:document", {}, [
@@ -598,3 +744,16 @@ def _linked_blip(relationship_id):
 
 def _blip(attributes):
     return xml_element("a:blip", attributes)
+
+
+def w_tr(*children):
+    return xml_element("w:tr", {}, children)
+
+def w_tc(properties=None, *children):
+    return xml_element("w:tc", {}, [xml_element("w:tcPr", {}, properties)] + list(children))
+
+def w_gridspan(val):
+    return xml_element("w:gridSpan", {"w:val": val})
+
+def w_vmerge(val):
+    return xml_element("w:vMerge", {"w:val": val})

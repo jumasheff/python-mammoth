@@ -153,7 +153,7 @@ def footnotes_are_appended_to_text():
         '<li id="doc-42-footnote-2"><p> Fin. <a href="#doc-42-footnote-ref-2">↑</a></p></li></ol>')
     
     with open(test_path("footnotes.docx"), "rb") as fileobj:
-        result = mammoth.convert_to_html(fileobj=fileobj, id_prefix="doc-42")
+        result = mammoth.convert_to_html(fileobj=fileobj, id_prefix="doc-42-")
         assert_equal([], result.messages)
         assert_equal(expected_html, result.value)
 
@@ -167,7 +167,7 @@ def endnotes_are_appended_to_text():
         '<li id="doc-42-endnote-3"><p> Fin. <a href="#doc-42-endnote-ref-3">↑</a></p></li></ol>')
     
     with open(test_path("endnotes.docx"), "rb") as fileobj:
-        result = mammoth.convert_to_html(fileobj=fileobj, id_prefix="doc-42")
+        result = mammoth.convert_to_html(fileobj=fileobj, id_prefix="doc-42-")
         assert_equal([], result.messages)
         assert_equal(expected_html, result.value)
 
@@ -179,7 +179,7 @@ def relationships_are_handled_properly_in_footnotes():
         '<ol><li id="doc-42-footnote-1"><p> <a href="http://www.example.com">Example</a> <a href="#doc-42-footnote-ref-1">↑</a></p></li></ol>')
     
     with open(test_path("footnote-hyperlink.docx"), "rb") as fileobj:
-        result = mammoth.convert_to_html(fileobj=fileobj, id_prefix="doc-42")
+        result = mammoth.convert_to_html(fileobj=fileobj, id_prefix="doc-42-")
         assert_equal([], result.messages)
         assert_equal(expected_html, result.value)
 
@@ -195,21 +195,14 @@ def text_boxes_are_read():
 def underline_is_ignored_by_default():
     with open(test_path("underline.docx"), "rb") as fileobj:
         result = mammoth.convert_to_html(fileobj=fileobj)
-        assert_equal('<p><strong>The </strong><strong>Sunset</strong><strong> Tree</strong></p>', result.value)
-
-
-@istest
-def underline_can_be_configured_with_convert_underline_option():
-    with open(test_path("underline.docx"), "rb") as fileobj:
-        result = mammoth.convert_to_html(fileobj=fileobj, convert_underline=mammoth.underline.element("em"))
-        assert_equal('<p><strong>The </strong><strong><em>Sunset</em></strong><strong> Tree</strong></p>', result.value)
+        assert_equal('<p><strong>The Sunset Tree</strong></p>', result.value)
 
 
 @istest
 def underline_can_be_configured_with_style_mapping():
     with open(test_path("underline.docx"), "rb") as fileobj:
         result = mammoth.convert_to_html(fileobj=fileobj, style_map="u => em")
-        assert_equal('<p><strong>The </strong><strong><em>Sunset</em></strong><strong> Tree</strong></p>', result.value)
+        assert_equal('<p><strong>The <em>Sunset</em> Tree</strong></p>', result.value)
 
 
 @istest
